@@ -28,6 +28,10 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
   const [credsSaved, setCredsSaved] = useState(false);
   const [forceDemo, setForceDemo] = useState(false);
 
+  // Version Info
+  const APP_VERSION = "v1.0.2";
+  const BUILD_DATE = "Wed Oct/25 10:30"; // Update this manually or via build script
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
         setOrigin(window.location.origin);
@@ -337,6 +341,14 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
            </div>
         </div>
         )}
+
+        {/* Version Footer */}
+        <div className="pt-4 text-center">
+            <p className="text-[10px] text-slate-400 dark:text-slate-600 font-mono tracking-wider">
+                {APP_VERSION} • {BUILD_DATE}
+            </p>
+        </div>
+
       </div>
     </div>
   );
