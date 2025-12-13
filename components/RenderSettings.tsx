@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RenderSettings, AspectRatio } from '../types';
 import { ASPECT_RATIOS } from '../constants';
-import { Settings, Film, Clock, Layers, Crop, Moon, Calendar, AlertOctagon, Trash2, X, Globe, Clipboard, Check, Key, Save, RefreshCw } from 'lucide-react';
+import { Settings, Film, Clock, Layers, Crop, Moon, Calendar, AlertOctagon, Trash2, X, Globe, Clipboard, Check, Key, Save, Play } from 'lucide-react';
 import { getCredentials, setCredentials } from '../services/googlePhotos';
 
 interface RenderSettingsProps {
@@ -26,6 +26,7 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
   const [customClientId, setCustomClientId] = useState('');
   const [customApiKey, setCustomApiKey] = useState('');
   const [credsSaved, setCredsSaved] = useState(false);
+  const [forceDemo, setForceDemo] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -33,6 +34,7 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
         const creds = getCredentials();
         setCustomClientId(creds.clientId);
         setCustomApiKey(creds.apiKey);
+        setForceDemo(localStorage.getItem('photoday_force_demo_mode') === 'true');
     }
   }, []);
 
@@ -70,6 +72,11 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
       setCredentials(customClientId, customApiKey);
       setCredsSaved(true);
       setTimeout(() => setCredsSaved(false), 2000);
+  };
+
+  const toggleForceDemo = (val: boolean) => {
+      setForceDemo(val);
+      localStorage.setItem('photoday_force_demo_mode', String(val));
   };
 
   const Toggle = ({ checked, onChange, label, icon: Icon }: any) => (
@@ -198,15 +205,22 @@ export const RenderSettingsPanel: React.FC<RenderSettingsProps> = ({
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-3 mb-4">
                 <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
                    <b>Seeing "storagerelay" or "redirect_uri" errors?</b><br/>
-                   This happens when the Authorized Origin in Google Cloud Console doesn't match your app's current URL.
-                   <br/><br/>
-                   1. Copy the <b>Current Origin</b> below.<br/>
-                   2. Add it to "Authorized JavaScript origins" in your Google Cloud Console.<br/>
-                   3. Enter your own Client ID and API Key below.
+                   1. Copy <b>Current Origin</b> to "Authorized JavaScript origins" in GCP.<br/>
+                   2. Enter your Client ID and API Key below.
                 </p>
             </div>
 
             <div className="space-y-3">
+                {/* Force Demo Toggle */}
+                <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg mb-2">
+                    <Toggle 
+                        checked={forceDemo} 
+                        onChange={toggleForceDemo} 
+                        label="Force Demo Mode (Skip Google Auth)" 
+                        icon={Play}
+                    />
+                </div>
+
                 <div>
                     <label className="text-xs text-slate-500 mb-1 block">Current Origin (Add to GCP)</label>
                     <div className="flex items-center gap-2">

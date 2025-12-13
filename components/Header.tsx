@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, onSwitchUser }) => 
           <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-sm">
             <Video size={18} />
           </div>
-          <h1 className="font-bold text-xl text-slate-900 dark:text-white tracking-tight">PhotoDay</h1>
+          <h1 className="font-bold text-xl text-slate-900 dark:text-white tracking-tight">Alex's Journey</h1>
         </div>
         
         <div className="relative">

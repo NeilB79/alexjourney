@@ -82,10 +82,17 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
     } catch (err: any) {
       console.warn("Google Picker interaction ended:", err);
       
-      // Check if it was a user cancellation (popup closed)
       const msg = err?.message || '';
+
+      // Force Demo mode activated
+      if (msg === 'FORCE_DEMO_MODE') {
+          setIsPickerMockOpen(true);
+          setPickerLoading(false);
+          return;
+      }
+      
+      // Check if it was a user cancellation (popup closed)
       if (msg.includes('popup_closed') || msg.includes('cancel')) {
-        // Just reset loading, do not enter mock mode
         setPickerLoading(false);
         return;
       }
