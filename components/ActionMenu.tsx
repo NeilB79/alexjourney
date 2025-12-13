@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2, RefreshCw, X } from 'lucide-react';
 import { SelectedItem } from '../types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 
 interface ActionMenuProps {
   item: SelectedItem | null;
@@ -9,6 +9,11 @@ interface ActionMenuProps {
   onDelete: (item: SelectedItem) => void;
   onReplace: (item: SelectedItem) => void;
 }
+
+const parseDateKey = (key: string): Date => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
 export const ActionMenu: React.FC<ActionMenuProps> = ({ item, onClose, onDelete, onReplace }) => {
   if (!item) return null;
@@ -21,7 +26,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ item, onClose, onDelete,
       >
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <span className="text-sm font-medium text-slate-500">
-            {format(parseISO(item.day), 'MMMM do')}
+            {format(parseDateKey(item.day), 'MMMM do')}
           </span>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-200">
             <X size={20} className="text-slate-400" />

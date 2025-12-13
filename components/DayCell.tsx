@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { DateCell, SelectedItem } from '../types';
-import { format, startOfToday } from 'date-fns';
+import { format } from 'date-fns';
 import { Plus, Lock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { USERS } from '../constants';
@@ -22,7 +22,9 @@ export const DayCell: React.FC<DayCellProps> = ({
   const [isPressing, setIsPressing] = useState(false);
 
   // Future check: strictly after today
-  const today = startOfToday();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
   const isFuture = day.date > today;
   const isMissing = !selection && !day.isToday && !isFuture;
   const isTodayEmpty = day.isToday && !selection;
@@ -79,7 +81,7 @@ export const DayCell: React.FC<DayCellProps> = ({
     e.currentTarget.classList.remove('bg-blue-50', 'ring-2', 'ring-blue-400');
     if (isFuture) return;
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       onDrop(e.dataTransfer.files);
     }
   };

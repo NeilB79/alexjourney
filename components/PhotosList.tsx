@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { DateCell, SelectedItem, DayKey } from '../types';
-import { format, startOfToday } from 'date-fns';
+import { format } from 'date-fns';
 import { Plus, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -21,7 +21,8 @@ export const PhotosList: React.FC<PhotosListProps> = ({
   onPreview,
   onLongPress,
 }) => {
-  const today = startOfToday();
+  const today = new Date();
+  today.setHours(0,0,0,0);
 
   // Filter out non-current month padding days unless they have selections
   // Also strictly filter out ANY date in the future

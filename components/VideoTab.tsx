@@ -3,7 +3,7 @@ import { RenderSettingsPanel } from './RenderSettings';
 import { RenderSettings, SelectedItem, DayKey } from '../types';
 import { generateVideo } from '../services/videoGenerator';
 import { Loader2, PlayCircle, Download, CalendarRange } from 'lucide-react';
-import { format, parseISO, isAfter, isBefore } from 'date-fns';
+import { format } from 'date-fns';
 
 interface VideoTabProps {
   selections: Record<DayKey, SelectedItem>;

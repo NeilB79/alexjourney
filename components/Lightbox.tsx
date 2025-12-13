@@ -1,17 +1,22 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { SelectedItem } from '../types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 
 interface LightboxProps {
   item: SelectedItem | null;
   onClose: () => void;
 }
 
+const parseDateKey = (key: string): Date => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
 export const Lightbox: React.FC<LightboxProps> = ({ item, onClose }) => {
   if (!item) return null;
 
-  const dateLabel = format(parseISO(item.day), 'MMMM do, yyyy');
+  const dateLabel = format(parseDateKey(item.day), 'MMMM do, yyyy');
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in fade-in duration-200">

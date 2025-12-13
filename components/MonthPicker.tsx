@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { startOfToday, setYear, setMonth, format } from 'date-fns';
 import { clsx } from 'clsx';
 
 interface MonthPickerProps {
@@ -17,7 +16,9 @@ const MONTHS = [
 
 export const MonthPicker: React.FC<MonthPickerProps> = ({ isOpen, onClose, currentDate, onSelectDate }) => {
   const [year, setYearState] = useState(currentDate.getFullYear());
-  const today = startOfToday();
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
   const currentRealYear = today.getFullYear();
   const currentRealMonth = today.getMonth();
 
@@ -28,7 +29,9 @@ export const MonthPicker: React.FC<MonthPickerProps> = ({ isOpen, onClose, curre
       if (year > currentRealYear || (year === currentRealYear && monthIndex > currentRealMonth)) {
           return;
       }
-      const newDate = setMonth(setYear(currentDate, year), monthIndex);
+      const newDate = new Date(currentDate);
+      newDate.setFullYear(year);
+      newDate.setMonth(monthIndex);
       onSelectDate(newDate);
       onClose();
   };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Smartphone, Image as ImageIcon, UploadCloud, Search, CheckCircle, AlertTriangle } from 'lucide-react';
 import { DayKey } from '../types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { openGooglePicker } from '../services/googlePhotos';
 
 interface SelectionModalProps {
@@ -19,6 +19,11 @@ const MOCK_GOOGLE_PHOTOS = [
   "https://images.unsplash.com/photo-1707327956851-30a531b70cda?w=400&q=80",
   "https://images.unsplash.com/photo-1706049379414-437ec3a54e93?w=400&q=80",
 ];
+
+const parseDateKey = (key: DayKey): Date => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
 export const SelectionModal: React.FC<SelectionModalProps> = ({ 
   isOpen, onClose, dayKey, onSelect, onGoogleSelect 
@@ -46,7 +51,7 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
 
   if (!isOpen || !dayKey) return null;
 
-  const dateLabel = format(parseISO(dayKey), 'MMMM do, yyyy');
+  const dateLabel = format(parseDateKey(dayKey), 'MMMM do, yyyy');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

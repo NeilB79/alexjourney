@@ -13,7 +13,7 @@ import { MonthPicker } from './components/MonthPicker';
 import { generateCalendarDays, formatDateKey } from './services/dateUtils';
 import { SelectedItem, DayKey, RenderSettings, DateCell, AppTab, Project, UserProfile } from './types';
 import { DEFAULT_SETTINGS, USERS } from './constants';
-import { addMonths, subMonths, format, addDays, startOfToday, isSameMonth, startOfMonth, parseISO, endOfMonth, eachDayOfInterval, isAfter, isBefore } from 'date-fns';
+import { addMonths, format, addDays, isSameMonth, endOfMonth, eachDayOfInterval, isAfter, isBefore } from 'date-fns';
 import { ChevronLeft, ChevronRight, AlertTriangle, ArrowUpDown, Calendar as CalendarIcon, CheckCircle2, CircleDashed } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -59,7 +59,9 @@ function App() {
   // Derived Data
   const calendarDays = useMemo(() => generateCalendarDays(currentDate, weekStartsOn), [currentDate, weekStartsOn]);
   const monthLabel = format(currentDate, 'MMMM yyyy');
-  const today = startOfToday();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
   const isCurrentMonthTheRealCurrentMonth = isSameMonth(currentDate, today);
 
   // Missing Count for the CURRENT VIEW
@@ -72,9 +74,20 @@ function App() {
     ).length;
   }, [calendarDays, project.selections]);
 
+  // Helper for parseISO
+  const parseDateKey = (key: DayKey): Date => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  
+  // Helper for startOfMonth
+  const startOfMonth = (date: Date): Date => {
+      return new Date(date.getFullYear(), date.getMonth(), 1);
+  };
+
   // Calculate Missing Months (Global)
   const missingMonths = useMemo(() => {
-    const start = parseISO(project.startDate);
+    const start = parseDateKey(project.startDate);
     const end = today; // We only care about missing photos up to today
     const months: { date: Date, missing: number }[] = [];
     
@@ -84,7 +97,7 @@ function App() {
     // Iterate month by month
     while (iter <= currentMonthStart) {
         // Don't go beyond project bounds if project ended in past
-        if (!project.isOngoing && isAfter(iter, parseISO(project.endDate))) break;
+        if (!project.isOngoing && isAfter(iter, parseDateKey(project.endDate))) break;
 
         const monthEnd = endOfMonth(iter);
         const daysInMonth = eachDayOfInterval({ start: iter, end: monthEnd });
@@ -119,7 +132,7 @@ function App() {
   };
 
   const handleDayClick = (day: DateCell) => {
-    if (day.date > startOfToday()) return; // Prevent future dates
+    if (day.date > new Date().setHours(0,0,0,0)) return; // Prevent future dates
     setSelectedDayKey(day.key);
     setIsModalOpen(true);
   };
@@ -171,7 +184,8 @@ function App() {
       
       const newSelections = { ...project.selections };
       let currentDay = new Date(selectedDayKey);
-      const today = startOfToday();
+      const today = new Date();
+      today.setHours(0,0,0,0);
 
       // Chronological assignment
       files.forEach((file) => {
@@ -201,7 +215,7 @@ function App() {
 
   const handleDropOnDay = (day: DateCell, files: FileList) => {
     const file = files[0];
-    if (file && file.type.startsWith('image/') && day.date <= startOfToday()) {
+    if (file && file.type.startsWith('image/') && day.date <= new Date()) {
         const imageUrl = URL.createObjectURL(file);
         const newItem: SelectedItem = {
             id: crypto.randomUUID(),
@@ -264,7 +278,7 @@ function App() {
             <div className="flex flex-col gap-3">
                <div className="flex items-center justify-between">
                   <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 active:bg-slate-100 dark:active:bg-slate-600">
+                    <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 active:bg-slate-100 dark:active:bg-slate-600">
                         <ChevronLeft size={20}/>
                     </button>
                     
@@ -347,7 +361,7 @@ function App() {
                <div className="flex items-center justify-between gap-2">
                     {/* Month Picker Control */}
                     <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                        <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700"><ChevronLeft size={18}/></button>
+                        <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700"><ChevronLeft size={18}/></button>
                         <span className="px-2 sm:px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 min-w-[80px] sm:min-w-[90px] text-center uppercase tracking-wide truncate">{format(currentDate, 'MMM yyyy')}</span>
                         <button 
                             onClick={() => setCurrentDate(addMonths(currentDate, 1))} 

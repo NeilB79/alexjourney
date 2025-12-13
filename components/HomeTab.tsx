@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Project, UserProfile, DayKey, SelectedItem } from '../types';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { Image as ImageIcon, CheckCircle2, CalendarClock, Infinity, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -13,15 +13,20 @@ interface HomeTabProps {
   onNavigate: (tab: any) => void;
 }
 
+const parseDateKey = (key: string): Date => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
 export const HomeTab: React.FC<HomeTabProps> = ({ 
   project, selections, currentUser, onUpdateProjectName, onUpdateProjectDates, onNavigate 
 }) => {
   const [isEditing, setIsEditing] = useState(false);
 
   const selectionCount = Object.keys(selections).length;
-  const start = parseISO(project.startDate);
+  const start = parseDateKey(project.startDate);
   // If ongoing, end date effectively moves with today
-  const end = project.isOngoing ? new Date() : parseISO(project.endDate);
+  const end = project.isOngoing ? new Date() : parseDateKey(project.endDate);
   
   const totalDays = Math.max(1, differenceInDays(end, start) + 1);
   const progress = Math.min(100, Math.round((selectionCount / totalDays) * 100));
@@ -179,7 +184,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <div className="flex items-center gap-3">
                <img src={lastSelection.imageUrl} className="w-12 h-12 rounded-lg object-cover bg-slate-100" />
                <div>
-                  <div className="text-sm font-medium text-slate-900 dark:text-white">{format(parseISO(lastSelection.day), 'MMMM do')}</div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-white">{format(parseDateKey(lastSelection.day), 'MMMM do')}</div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                      <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white font-bold ${
                         lastSelection.addedBy === 'u1' ? 'bg-blue-500' : 'bg-pink-500'
