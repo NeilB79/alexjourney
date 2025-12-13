@@ -2,8 +2,21 @@ version: '3.8'
 
 services:
   web:
-    build: .
+    # Points to your GitHub Container Registry image
+    image: ghcr.io/alexjourney/alexs-journey:latest
     container_name: alexjourney
+    restart: always
     ports:
       - "8080:80"
+    # Always check for a new image when running 'docker-compose up'
+    pull_policy: always
+
+  # Watchtower automatically updates your app when a new image is pushed
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Check for updates every 300 seconds (5 minutes)
+    command: --interval 300
     restart: always
