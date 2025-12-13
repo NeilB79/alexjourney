@@ -1,9 +1,33 @@
 version: '3.8'
 
 services:
+  # Node.js Backend API
+  api:
+    image: node:20-bookworm
+    container_name: alexjourney-api
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+    command: sh -c "npm install && npm run server"
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - UPLOAD_DIR=./uploads
+      - DATA_DIR=./data
+      - JWT_SECRET=change_this_secret_in_prod
+    # Ensure ffmpeg is installed in the container
+    entrypoint: sh -c "apt-get update && apt-get install -y ffmpeg && npm install && npm run server"
+    restart: always
+
+  # Nginx Frontend
   web:
     build: .
-    container_name: alexjourney
+    container_name: alexjourney-web
     ports:
       - "8080:80"
+    depends_on:
+      - api
     restart: always

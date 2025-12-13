@@ -132,7 +132,7 @@ function App() {
   };
 
   const handleDayClick = (day: DateCell) => {
-    if (day.date > new Date().setHours(0,0,0,0)) return; // Prevent future dates
+    if (day.date.getTime() > new Date().setHours(0,0,0,0)) return; // Prevent future dates
     setSelectedDayKey(day.key);
     setIsModalOpen(true);
   };
