@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RenderSettingsPanel } from './RenderSettings';
 import { RenderSettings, SelectedItem, DayKey } from '../types';
-import { api } from '../services/api'; // Use API
+import { api } from '../services/api';
 import { Loader2, PlayCircle, Download, CalendarRange } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -13,6 +13,7 @@ interface VideoTabProps {
   currentDate: Date;
   projectStartDate: string;
   projectEndDate: string;
+  onVersionClick?: () => void;
 }
 
 export const VideoTab: React.FC<VideoTabProps> = ({
@@ -21,7 +22,8 @@ export const VideoTab: React.FC<VideoTabProps> = ({
   onSettingsChange,
   currentDate,
   projectStartDate,
-  projectEndDate
+  projectEndDate,
+  onVersionClick
 }) => {
   const [isRendering, setIsRendering] = useState(false);
   const [renderStatus, setRenderStatus] = useState('');
@@ -41,7 +43,6 @@ export const VideoTab: React.FC<VideoTabProps> = ({
     setRenderStatus('Initializing server render...');
     setVideoUrl(null);
 
-    // Filter to check count locally first
     const countInRange = Object.keys(selections).filter(k => k >= rangeStart && k <= rangeEnd).length;
 
     if (countInRange === 0) {
@@ -51,8 +52,9 @@ export const VideoTab: React.FC<VideoTabProps> = ({
     }
 
     try {
+        setRenderStatus('Processing Smart Crop & FFMPEG...');
         const result = await api.renderVideo({
-            projectId: 'p_default', // Assuming single project context for now or pass from props
+            projectId: 'p_default', 
             rangeStart,
             rangeEnd,
             settings
@@ -102,10 +104,10 @@ export const VideoTab: React.FC<VideoTabProps> = ({
 
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 text-center">
         <h2 className="text-blue-900 dark:text-blue-100 font-bold text-lg">{countInRange} Photos in Range</h2>
-        <p className="text-blue-600 dark:text-blue-300 text-sm">Ready to generate your montage (Server Side)</p>
+        <p className="text-blue-600 dark:text-blue-300 text-sm">Photos will be processed with {settings.smartCrop ? 'Smart Face Focus' : 'Center Crop'}</p>
       </div>
 
-      <RenderSettingsPanel settings={settings} onChange={onSettingsChange} />
+      <RenderSettingsPanel settings={settings} onChange={onSettingsChange} onVersionClick={onVersionClick} />
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">

@@ -11,13 +11,17 @@ import { HomeTab } from './components/HomeTab';
 import { RenderSettingsPanel } from './components/RenderSettings';
 import { MonthPicker } from './components/MonthPicker';
 import { AdminUsers } from './components/AdminUsers';
+import { DebugConsole } from './components/DebugConsole';
+import { ChangelogModal } from './components/ChangelogModal';
 import { generateCalendarDays, formatDateKey } from './services/dateUtils';
 import { SelectedItem, DayKey, RenderSettings, DateCell, AppTab, Project, UserProfile } from './types';
-import { DEFAULT_SETTINGS } from './constants';
+import { DEFAULT_SETTINGS, APP_VERSION, BUILD_DATE } from './constants';
 import { addMonths, format, addDays, isSameMonth, endOfMonth, eachDayOfInterval, isAfter, isBefore } from 'date-fns';
-import { ChevronLeft, ChevronRight, AlertTriangle, ArrowUpDown, Calendar as CalendarIcon, CheckCircle2, CircleDashed, LogIn } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, ArrowUpDown, Calendar as CalendarIcon, CheckCircle2, CircleDashed, LogIn, WifiOff, ToggleLeft, ToggleRight, Info } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from './services/api';
+// Initialize logger early
+import './services/logger';
 
 function App() {
   // Auth State
@@ -25,13 +29,13 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [loginCreds, setLoginCreds] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
+  const [debugMode, setDebugMode] = useState(false);
   
   // Navigation State
   const [activeTab, setActiveTab] = useState<AppTab>('home');
 
   // User State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [darkMode, setDarkMode] = useState(true);
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(0);
 
@@ -47,6 +51,7 @@ function App() {
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<SelectedItem | null>(null);
   const [actionMenuItem, setActionMenuItem] = useState<SelectedItem | null>(null);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
   
   // --- INITIALIZATION & AUTH ---
 
@@ -68,17 +73,13 @@ function App() {
 
   const loadData = async () => {
       try {
-          const [proj, users] = await Promise.all([
-              api.getProject(),
-              api.getUsers()
-          ]);
+          const proj = await api.getProject();
           setProject(proj);
-          setRenderSettings(proj.settings || DEFAULT_SETTINGS);
-          setAllUsers(users);
+          if (proj.settings) setRenderSettings(proj.settings);
       } catch (e) {
           console.error(e);
-          // If auth fails, logout
-          handleLogout();
+          // If project load fails, maybe token invalid
+          if (!project) handleLogout();
       }
   };
 
@@ -87,13 +88,19 @@ function App() {
       setAuthLoading(true);
       setLoginError('');
       try {
-          const data = await api.login(loginCreds.username, loginCreds.password);
+          // Pass debugMode to force mock if enabled
+          const data = await api.login(loginCreds.username, loginCreds.password, debugMode);
           localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify(data.user));
           setToken(data.token);
           setCurrentUser(data.user);
-      } catch (err) {
-          setLoginError('Invalid credentials');
+          setProject(null); // Clear old state
+          // Settings from login response
+          if (data.settings) {
+              if (data.settings.videoSettings) setRenderSettings(data.settings.videoSettings);
+          }
+      } catch (err: any) {
+          setLoginError(err.message || 'Login failed');
       } finally {
           setAuthLoading(false);
       }
@@ -107,9 +114,10 @@ function App() {
       setProject(null);
   };
 
+  const isDemoMode = token === 'mock-token';
+
   // --- DATA LOGIC ---
   
-  // Derived Data
   const calendarDays = useMemo(() => generateCalendarDays(currentDate, weekStartsOn), [currentDate, weekStartsOn]);
   const monthLabel = format(currentDate, 'MMMM yyyy');
   const today = new Date();
@@ -119,7 +127,6 @@ function App() {
 
   const selections = project?.selections || {};
 
-  // Missing Count
   const missingCount = useMemo(() => {
     if (!project) return 0;
     return calendarDays.filter(d => 
@@ -130,55 +137,31 @@ function App() {
     ).length;
   }, [calendarDays, selections]);
 
-  // Helper for parseISO
-  const parseDateKey = (key: DayKey): Date => {
-    const [y, m, d] = key.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  };
-  
-  const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
-
-  // Calculate Missing Months
-  const missingMonths = useMemo(() => {
-    if (!project) return [];
-    const start = parseDateKey(project.startDate);
-    const end = today; 
-    const months: { date: Date, missing: number }[] = [];
-    
-    let iter = startOfMonth(start);
-    const currentMonthStart = startOfMonth(end);
-
-    while (iter <= currentMonthStart) {
-        if (!project.isOngoing && isAfter(iter, parseDateKey(project.endDate))) break;
-
-        const monthEnd = endOfMonth(iter);
-        const daysInMonth = eachDayOfInterval({ start: iter, end: monthEnd });
-        
-        let count = 0;
-        daysInMonth.forEach(d => {
-            if (isBefore(d, today) || d.getTime() === today.getTime()) {
-                if (!selections[formatDateKey(d)]) {
-                    count++;
-                }
-            }
-        });
-
-        if (count > 0) {
-            months.push({ date: iter, missing: count });
-        }
-
-        iter = addMonths(iter, 1);
-    }
-
-    return months.reverse(); 
-  }, [selections, project, today]);
-
-  // Handlers
-  const updateProject = async (updates: Partial<Project>) => {
+  // Update Settings Wrapper
+  const updateSettings = async (updates: any) => {
       if (!project) return;
-      const updated = { ...project, ...updates };
-      setProject(updated); // Optimistic UI
-      await api.updateProject({ ...updated, settings: renderSettings });
+      const newSettings = { ...renderSettings, ...updates };
+      setRenderSettings(newSettings);
+      
+      await api.updateSettings(
+          project.startDate, 
+          project.endDate, 
+          !!project.isOngoing, 
+          newSettings
+      );
+  };
+
+  // Update Project Wrapper
+  const updateProjectDetails = async (name: string) => {
+      if (!project) return;
+      setProject({ ...project, name });
+      await api.updateProjectName(name);
+  };
+
+  const updateProjectDates = async (s: string, e: string, o: boolean) => {
+      if (!project) return;
+      setProject({ ...project, startDate: s, endDate: e, isOngoing: o });
+      await api.updateSettings(s, e, o, renderSettings);
   };
 
   const handlePhotoSelect = async (file: File) => {
@@ -187,6 +170,7 @@ function App() {
     try {
         const result = await api.uploadPhoto(project.id, selectedDayKey, file);
         
+        // Optimistic / Result update
         const newItem: SelectedItem = {
           id: result.id,
           source: 'server',
@@ -194,6 +178,8 @@ function App() {
           imageUrl: result.imageUrl,
           mimeType: file.type,
           addedBy: currentUser?.id,
+          addedByName: currentUser?.name,
+          createdAt: result.createdAt,
           smartCrop: result.smartCrop
         };
 
@@ -206,15 +192,6 @@ function App() {
     } catch (e) {
         alert("Failed to upload photo");
     }
-  };
-  
-  const handleGoogleSelect = async (files: { url: string, id: string }[]) => {
-      // For now, server doesn't support downloading google URLs automatically,
-      // so this would remain client-side logic OR would need a backend downloader.
-      // Keeping existing client-side logic for Google photos for now, 
-      // but note: Server render won't work with remote Google URLs unless we download them.
-      alert("Google Photos integration needs backend download support. Please download and upload from device for full server features.");
-      setIsModalOpen(false);
   };
 
   const handleDelete = async (item: SelectedItem) => {
@@ -233,11 +210,34 @@ function App() {
   };
 
   // --- RENDER ---
+  
+  // Common elements to render regardless of login state
+  const debugUI = (
+      <>
+          <DebugConsole />
+          <ChangelogModal isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />
+      </>
+  );
 
   if (!token || !currentUser || !project) {
       return (
-          <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 w-full max-w-md p-8 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+          <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 relative">
+              {/* Top Right Debug Toggle */}
+              <div className="absolute top-4 right-4 flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-full shadow-md border border-slate-200 dark:border-slate-800 animate-in fade-in slide-in-from-top-4">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 pl-2">Debug</span>
+                  <button 
+                    onClick={() => setDebugMode(!debugMode)}
+                    className={clsx(
+                        "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+                        debugMode ? "bg-amber-100 text-amber-700" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                    )}
+                  >
+                     {debugMode ? <ToggleRight size={18} className="text-amber-600"/> : <ToggleLeft size={18}/>}
+                     {debugMode ? "Mock ON" : "Off"}
+                  </button>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 w-full max-w-md p-8 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 relative overflow-hidden">
                   <div className="text-center mb-8">
                       <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white mb-4 shadow-lg shadow-blue-500/30">
                           <LogIn size={32} />
@@ -268,22 +268,43 @@ function App() {
                           />
                       </div>
                       
-                      {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
+                      {loginError && <p className="text-red-500 text-sm text-center animate-pulse">{loginError}</p>}
                       
                       <button 
                         type="submit" 
                         disabled={authLoading}
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center"
+                        className={clsx(
+                            "w-full py-3 text-white font-bold rounded-lg transition-all flex items-center justify-center shadow-lg",
+                            debugMode ? "bg-amber-600 hover:bg-amber-700 shadow-amber-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20"
+                        )}
                       >
-                          {authLoading ? <CircleDashed className="animate-spin" /> : 'Sign In'}
+                          {authLoading ? <CircleDashed className="animate-spin" /> : (debugMode ? 'Sign In (Mock)' : 'Sign In')}
                       </button>
                   </form>
+                  <div className="mt-6 text-center">
+                    <p className="text-xs text-slate-400">Default Admin: neil / neil</p>
+                  </div>
+                  
+                  {debugMode && (
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-amber-500"></div>
+                  )}
               </div>
+
+              {/* Version Footer */}
+              <div className="mt-8 text-center opacity-40 hover:opacity-100 transition-opacity">
+                  <button 
+                     onClick={() => setIsChangelogOpen(true)}
+                     className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-blue-500 hover:underline cursor-pointer"
+                  >
+                     {APP_VERSION} • {BUILD_DATE}
+                  </button>
+              </div>
+              
+              {debugUI}
           </div>
       );
   }
 
-  // ... (Keep existing Helper Components like StatusIndicator)
   const StatusIndicator = ({ missing }: { missing: number }) => (
     missing === 0 
     ? <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 shadow-sm relative"><div className="absolute inset-0 rounded-full bg-green-400/20 animate-ping"></div><CheckCircle2 size={18} className="relative z-10" /></div>
@@ -293,11 +314,10 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <HomeTab project={project} selections={selections} currentUser={currentUser} onUpdateProjectName={n => updateProject({name: n})} onUpdateProjectDates={(s, e, o) => updateProject({startDate: s, endDate: e, isOngoing: o})} onNavigate={setActiveTab} />;
+        return <HomeTab project={project} selections={selections} currentUser={currentUser} onUpdateProjectName={updateProjectDetails} onUpdateProjectDates={updateProjectDates} onNavigate={setActiveTab} />;
       case 'calendar':
         return (
           <div className="space-y-4 pb-24">
-             {/* ... Keep existing calendar header ... */}
             <div className="flex flex-col gap-3">
                <div className="flex items-center justify-between">
                   <div className="flex items-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -338,15 +358,25 @@ function App() {
              </div>
         );
       case 'video':
-        return <VideoTab selections={selections} calendarDays={calendarDays} settings={renderSettings} onSettingsChange={setRenderSettings} currentDate={currentDate} projectStartDate={project.startDate} projectEndDate={project.isOngoing ? format(new Date(), 'yyyy-MM-dd') : project.endDate} />;
+        return <VideoTab selections={selections} calendarDays={calendarDays} settings={renderSettings} onSettingsChange={updateSettings} currentDate={currentDate} projectStartDate={project.startDate} projectEndDate={project.isOngoing ? format(new Date(), 'yyyy-MM-dd') : project.endDate} onVersionClick={() => setIsChangelogOpen(true)} />;
       case 'settings':
         return (
            <div className="space-y-6 pb-24">
-             <RenderSettingsPanel settings={renderSettings} onChange={s => { setRenderSettings(s); updateProject({settings: s}); }} darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)} weekStartsOn={weekStartsOn} onToggleWeekStart={() => setWeekStartsOn(prev => prev === 0 ? 1 : 0)} />
+             <RenderSettingsPanel settings={renderSettings} onChange={updateSettings} darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)} weekStartsOn={weekStartsOn} onToggleWeekStart={() => setWeekStartsOn(prev => prev === 0 ? 1 : 0)} onVersionClick={() => setIsChangelogOpen(true)} />
              {currentUser.role === 'admin' && (
                  <AdminUsers />
              )}
-             <div className="pt-4 text-center"><button onClick={handleLogout} className="text-red-500 text-sm font-medium">Log Out</button></div>
+             <div className="pt-4 text-center">
+                 <button onClick={handleLogout} className="text-red-500 text-sm font-medium">Log Out</button>
+                 <div className="mt-6 text-center opacity-40 hover:opacity-100 transition-opacity">
+                    <button 
+                       onClick={() => setIsChangelogOpen(true)}
+                       className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-blue-500 hover:underline cursor-pointer"
+                    >
+                       {APP_VERSION} • {BUILD_DATE}
+                    </button>
+                 </div>
+             </div>
            </div>
         );
       default: return null;
@@ -356,12 +386,24 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
       <Header currentUser={currentUser} onSwitchUser={() => {}} />
+      
+      {/* Demo Mode Indicator */}
+      {isDemoMode && (
+         <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-4 py-1 text-center text-xs font-semibold flex items-center justify-center gap-2">
+            <WifiOff size={12} />
+            <span>Offline Demo Mode Active</span>
+         </div>
+      )}
+
       <main className="max-w-xl mx-auto px-4 py-4">{renderContent()}</main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-      <SelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} dayKey={selectedDayKey} onSelect={handlePhotoSelect} onGoogleSelect={handleGoogleSelect} />
+      <SelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} dayKey={selectedDayKey} onSelect={handlePhotoSelect} onGoogleSelect={() => {}} />
       <MonthPicker isOpen={isMonthPickerOpen} onClose={() => setIsMonthPickerOpen(false)} currentDate={currentDate} onSelectDate={setCurrentDate} />
       <Lightbox item={previewItem} onClose={() => setPreviewItem(null)} />
       <ActionMenu item={actionMenuItem} onClose={() => setActionMenuItem(null)} onDelete={handleDelete} onReplace={i => {setSelectedDayKey(i.day); setIsModalOpen(true);}} />
+      
+      {/* Global Elements */}
+      {debugUI}
     </div>
   );
 }

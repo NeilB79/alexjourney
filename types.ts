@@ -1,25 +1,34 @@
 export type DayKey = string; // 'YYYY-MM-DD'
 
-export type MediaSource = 'device' | 'google-photos';
+export type MediaSource = 'device' | 'google-photos' | 'server';
 
 export interface UserProfile {
   id: string;
   name: string;
   avatar: string;
-  color: string; // Tailwinc color class prefix, e.g. 'blue'
+  color: string;
+  role?: 'admin' | 'user';
+}
+
+export interface SmartCropData {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
 }
 
 export interface SelectedItem {
   id: string;
   source: MediaSource;
   day: DayKey;
-  file?: File; // For device files
-  imageUrl: string; // Blob URL or Remote URL
+  file?: File; 
+  imageUrl: string;
   mimeType: string;
-  width?: number;
-  height?: number;
+  addedBy?: string;
+  addedByName?: string;
+  createdAt?: string;
+  smartCrop?: SmartCropData;
   caption?: string;
-  addedBy?: string; // User ID
 }
 
 export type AspectRatio = '16:9' | '1:1' | '9:16';
@@ -30,24 +39,18 @@ export interface RenderSettings {
   durationPerSlide: number; // seconds
   transition: TransitionType;
   showDateOverlay: boolean;
-  smartCrop: boolean; // Face focus / Top weighted
+  smartCrop: boolean;
   backgroundColor: string;
 }
 
 export interface Project {
   id: string;
   name: string;
-  startDate: string; // ISO string
-  endDate: string; // ISO string
+  startDate: string;
+  endDate: string;
   isOngoing?: boolean;
   selections: Record<DayKey, SelectedItem>;
-}
-
-export interface ProjectState {
-  project: Project;
-  settings: RenderSettings;
-  darkMode: boolean;
-  currentUser: UserProfile;
+  settings?: RenderSettings;
 }
 
 export interface DateCell {

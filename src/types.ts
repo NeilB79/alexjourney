@@ -25,6 +25,8 @@ export interface SelectedItem {
   imageUrl: string;
   mimeType: string;
   addedBy?: string;
+  addedByName?: string;
+  createdAt?: string;
   smartCrop?: SmartCropData;
   caption?: string;
 }

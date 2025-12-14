@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Smartphone, Image as ImageIcon } from 'lucide-react';
+import { X, Smartphone, Loader2 } from 'lucide-react';
 import { DayKey } from '../types';
 import { format } from 'date-fns';
+import { openGooglePicker } from '../services/googlePhotos';
 
 interface SelectionModalProps {
   isOpen: boolean;
@@ -16,9 +17,21 @@ const parseDateKey = (key: DayKey): Date => {
   return new Date(y, m - 1, d);
 };
 
+// Google Photos Pinwheel SVG
+const GooglePhotosIcon = () => (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5.5 12C5.5 8.41015 8.41015 5.5 12 5.5V12H5.5Z" fill="#FBBC04"/>
+        <path d="M12 5.5C15.5899 5.5 18.5 8.41015 18.5 12H12V5.5Z" fill="#EA4335"/>
+        <path d="M12 18.5C8.41015 18.5 5.5 15.5899 5.5 12H12V18.5Z" fill="#34A853"/>
+        <path d="M18.5 12C18.5 15.5899 15.5899 18.5 12 18.5V12H18.5Z" fill="#4285F4"/>
+    </svg>
+);
+
 export const SelectionModal: React.FC<SelectionModalProps> = ({ 
-  isOpen, onClose, dayKey, onSelect 
+  isOpen, onClose, dayKey, onSelect, onGoogleSelect 
 }) => {
+  const [loading, setLoading] = useState(false);
+
   if (!isOpen || !dayKey) return null;
 
   const dateLabel = format(parseDateKey(dayKey), 'MMMM do, yyyy');
@@ -27,6 +40,28 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
     if (e.target.files && e.target.files[0]) {
       onSelect(e.target.files[0]);
       onClose();
+    }
+  };
+
+  const handleGooglePhotos = async () => {
+    setLoading(true);
+    try {
+        await openGooglePicker(
+            undefined, 
+            (files) => {
+                onGoogleSelect(files);
+                onClose();
+            },
+            () => setLoading(false)
+        );
+    } catch (e: any) {
+        setLoading(false);
+        if (e.message !== 'popup_closed') {
+             alert(e.message === 'FORCE_DEMO_MODE' 
+                ? 'Google Photos is disabled in Demo Mode.' 
+                : 'Failed to open Google Photos. Check console logs.');
+             console.error(e);
+        }
     }
   };
 
@@ -59,15 +94,16 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
              </label>
 
              <button 
-                onClick={() => alert('Google Photos integration requires server download logic (Coming Soon)')}
-                className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98] opacity-60"
+                onClick={handleGooglePhotos}
+                disabled={loading}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait"
              >
-                <div className="w-12 h-12 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600 dark:text-pink-400">
-                    <ImageIcon size={24} />
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                    {loading ? <Loader2 size={24} className="animate-spin text-slate-500" /> : <GooglePhotosIcon />}
                 </div>
                 <div className="flex-1 text-left">
                     <h3 className="font-semibold text-slate-900 dark:text-white">Google Photos</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Connect cloud account</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Select from your cloud library</p>
                 </div>
              </button>
         </div>

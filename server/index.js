@@ -63,8 +63,34 @@ app.post('/api/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, username: user.username, role: user.role, color: user.role === 'admin' ? 'blue' : 'pink' } });
+  // Get user settings
+  let settings = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(user.id);
+  
+  // Create default settings if not exist
+  if (!settings) {
+      const year = new Date().getFullYear();
+      db.prepare('INSERT INTO user_settings (user_id, start_date, end_date, is_ongoing) VALUES (?, ?, ?, ?)').run(user.id, `${year}-01-01`, `${year}-12-31`, 0);
+      settings = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(user.id);
+  }
+
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ 
+      token, 
+      user: { 
+          id: user.id, 
+          name: user.username, 
+          role: user.role, 
+          avatar: user.username[0].toUpperCase(),
+          color: user.role === 'admin' ? 'blue' : 'pink'
+      },
+      settings: {
+          startDate: settings.start_date,
+          endDate: settings.end_date,
+          isOngoing: !!settings.is_ongoing,
+          themePref: settings.theme_pref,
+          videoSettings: settings.video_settings_json ? JSON.parse(settings.video_settings_json) : null
+      }
+  });
 });
 
 app.post('/api/users', authenticate, isAdmin, (req, res) => {
@@ -75,18 +101,42 @@ app.post('/api/users', authenticate, isAdmin, (req, res) => {
         const hash = bcrypt.hashSync(password, 10);
         const id = 'u_' + Date.now();
         db.prepare('INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)').run(id, username, hash);
+        
+        // Default settings
+        const year = new Date().getFullYear();
+        db.prepare('INSERT INTO user_settings (user_id, start_date, end_date) VALUES (?, ?, ?)').run(id, `${year}-01-01`, `${year}-12-31`);
+
         res.json({ success: true, id });
     } catch (e) {
+        console.error(e);
         res.status(400).json({ error: 'Username likely exists' });
     }
 });
 
+app.put('/api/users/:id', authenticate, isAdmin, (req, res) => {
+    const { username, password } = req.body;
+    const { id } = req.params;
+    
+    try {
+        if (password && password.trim().length > 0) {
+             const hash = bcrypt.hashSync(password, 10);
+             db.prepare('UPDATE users SET username = ?, password_hash = ? WHERE id = ?').run(username, hash, id);
+        } else {
+             db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, id);
+        }
+        res.json({ success: true });
+    } catch(e) {
+        console.error(e);
+        res.status(400).json({ error: 'Update failed (username might exist)' });
+    }
+});
+
 app.get('/api/users', authenticate, (req, res) => {
-    // Return simple list for UI
     const users = db.prepare('SELECT id, username, role FROM users').all();
     const mapped = users.map(u => ({
         id: u.id,
         name: u.username,
+        role: u.role,
         avatar: u.username[0].toUpperCase(),
         color: u.role === 'admin' ? 'blue' : 'pink'
     }));
@@ -96,23 +146,21 @@ app.get('/api/users', authenticate, (req, res) => {
 
 // --- DATA ROUTES ---
 
-// Get Project (Singleton for now per user, or shared)
 app.get('/api/project', authenticate, (req, res) => {
-    // For simplicity in this app, everyone shares the "Family Project"
-    // In a real SaaS, this would be filtered by req.user.id
-    let project = db.prepare('SELECT * FROM projects LIMIT 1').get();
+    // Shared Project
+    let project = db.prepare('SELECT * FROM projects WHERE id = ?').get('p_default');
     
-    if (!project) {
-        // Create default
-        const id = 'p_default';
-        db.prepare('INSERT INTO projects (id, user_id, name, start_date, end_date, is_ongoing, settings_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run(id, req.user.id, 'Family Journey', '2024-01-01', '2024-12-31', 0, '{}');
-        project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
-    }
+    // User specific settings
+    const settings = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(req.user.id);
 
-    const photos = db.prepare('SELECT * FROM photos WHERE project_id = ?').all(project.id);
-    const selections = {};
+    const photos = db.prepare(`
+        SELECT p.*, u.username as added_by_name 
+        FROM photos p 
+        LEFT JOIN users u ON p.added_by = u.id
+        WHERE project_id = ?
+    `).all('p_default');
     
+    const selections = {};
     photos.forEach(p => {
         selections[p.day_key] = {
             id: p.id,
@@ -121,6 +169,8 @@ app.get('/api/project', authenticate, (req, res) => {
             imageUrl: `/uploads/${p.filename}`,
             mimeType: p.mime_type,
             addedBy: p.added_by,
+            addedByName: p.added_by_name,
+            createdAt: p.created_at,
             smartCrop: p.smart_crop_json ? JSON.parse(p.smart_crop_json) : null
         };
     });
@@ -128,21 +178,28 @@ app.get('/api/project', authenticate, (req, res) => {
     res.json({
         id: project.id,
         name: project.name,
-        startDate: project.start_date,
-        endDate: project.end_date,
-        isOngoing: !!project.is_ongoing,
-        settings: JSON.parse(project.settings_json || '{}'),
+        // Return user specific dates/settings
+        startDate: settings.start_date,
+        endDate: settings.end_date,
+        isOngoing: !!settings.is_ongoing,
+        settings: settings.video_settings_json ? JSON.parse(settings.video_settings_json) : null,
         selections
     });
 });
 
-app.post('/api/project', authenticate, (req, res) => {
-    const { id, name, startDate, endDate, isOngoing, settings } = req.body;
+app.post('/api/project/settings', authenticate, (req, res) => {
+    const { startDate, endDate, isOngoing, settings } = req.body;
     db.prepare(`
-        UPDATE projects 
-        SET name = ?, start_date = ?, end_date = ?, is_ongoing = ?, settings_json = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `).run(name, startDate, endDate, isOngoing ? 1 : 0, JSON.stringify(settings), id);
+        UPDATE user_settings 
+        SET start_date = ?, end_date = ?, is_ongoing = ?, video_settings_json = ?
+        WHERE user_id = ?
+    `).run(startDate, endDate, isOngoing ? 1 : 0, JSON.stringify(settings), req.user.id);
+    res.json({ success: true });
+});
+
+app.post('/api/project/name', authenticate, isAdmin, (req, res) => {
+    const { name } = req.body;
+    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(name, 'p_default');
     res.json({ success: true });
 });
 
@@ -155,24 +212,25 @@ app.post('/api/upload', authenticate, upload.single('photo'), async (req, res) =
 
     try {
         // 1. Analyze for Smart Crop (Face Focus)
-        // Resize to a manageable size for analysis to speed it up
-        const imageBuffer = await sharp(file.path).resize(1280).toBuffer();
-        const cropResult = await smartcrop.crop(imageBuffer, { width: 1080, height: 1080 }); // Square preference for analysis
-        const smartCropData = cropResult.topCrop;
+        let smartCropData = null;
+        try {
+            const imageBuffer = await sharp(file.path).resize(1280).toBuffer();
+            const cropResult = await smartcrop.crop(imageBuffer, { width: 1080, height: 1080 });
+            smartCropData = cropResult.topCrop;
+        } catch (e) {
+            console.warn("Smart crop failed, defaulting center", e);
+        }
 
-        // 2. Check if existing photo exists for this day/project
+        // 2. Check/Delete Existing
         const existing = db.prepare('SELECT * FROM photos WHERE project_id = ? AND day_key = ?').get(projectId, dayKey);
         
         if (existing) {
-            // Delete old file
             const oldPath = path.join(UPLOAD_DIR, existing.filename);
             if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-            
-            // Delete DB record
             db.prepare('DELETE FROM photos WHERE id = ?').run(existing.id);
         }
 
-        // 3. Save new record
+        // 3. Save
         const id = 'ph_' + Date.now();
         db.prepare(`
             INSERT INTO photos (id, project_id, day_key, filename, original_name, mime_type, size, smart_crop_json, added_by)
@@ -182,7 +240,10 @@ app.post('/api/upload', authenticate, upload.single('photo'), async (req, res) =
         res.json({
             id,
             imageUrl: `/uploads/${file.filename}`,
-            smartCrop: smartCropData
+            smartCrop: smartCropData,
+            addedBy: req.user.id,
+            addedByName: req.user.username,
+            createdAt: new Date().toISOString()
         });
 
     } catch (err) {
@@ -207,7 +268,6 @@ app.delete('/api/photo/:id', authenticate, (req, res) => {
 app.post('/api/render', authenticate, async (req, res) => {
     const { projectId, rangeStart, rangeEnd, settings } = req.body;
     
-    // Fetch photos in range
     const photos = db.prepare(`
         SELECT * FROM photos 
         WHERE project_id = ? AND day_key >= ? AND day_key <= ?
@@ -223,10 +283,6 @@ app.post('/api/render', authenticate, async (req, res) => {
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
     try {
-        // Create input file list for ffmpeg
-        // We will preprocess images using Sharp to apply the Smart Crop 
-        // because doing complex crop filtering in a single ffmpeg command for variable inputs is extremely error prone.
-        
         const fileListPath = path.join(tempDir, 'files.txt');
         const fileStream = fs.createWriteStream(fileListPath);
         
@@ -235,38 +291,28 @@ app.post('/api/render', authenticate, async (req, res) => {
         const targetW = parseInt(wStr);
         const targetH = parseInt(hStr);
 
-        console.log(`Starting render: ${photos.length} photos. Target: ${targetW}x${targetH}`);
+        console.log(`Starting render: ${photos.length} photos. Target: ${targetW}x${targetH}. SmartCrop: ${settings.smartCrop}`);
 
         for (const [index, photo] of photos.entries()) {
             const originalPath = path.join(UPLOAD_DIR, photo.filename);
             const processedPath = path.join(tempDir, `frame_${index.toString().padStart(4, '0')}.jpg`);
             
-            // Smart Crop Application
             const crop = photo.smart_crop_json ? JSON.parse(photo.smart_crop_json) : null;
-            
             let pipeline = sharp(originalPath);
             
-            // Logic: If settings.smartCrop is true and we have data, we assume the data is relative to the original image
-            // Note: smartcrop library usually returns x, y, width, height for the crop area.
-            
             if (settings.smartCrop && crop) {
-               pipeline = pipeline.extract({ left: crop.x, top: crop.y, width: crop.width, height: crop.height });
+               pipeline = pipeline.resize(targetW, targetH, { fit: 'cover', position: 'attention' });
+            } else {
+               pipeline = pipeline.resize(targetW, targetH, { fit: 'cover' });
             }
             
-            // Resize to final output size (cover)
-            await pipeline
-                .resize(targetW, targetH, { fit: 'cover' })
-                .toFile(processedPath);
+            await pipeline.toFile(processedPath);
 
-            // Add to concat list
-            // FFmpeg concat demuxer format:
-            // file 'path'
-            // duration 2
             fileStream.write(`file '${path.resolve(processedPath)}'\n`);
             fileStream.write(`duration ${settings.durationPerSlide}\n`);
         }
         
-        // Add last file again due to FFmpeg concat quirk (it needs to know the duration of the last file)
+        // Fix for ffmpeg concat last frame duration
         const lastIndex = photos.length - 1;
         fileStream.write(`file '${path.resolve(path.join(tempDir, `frame_${lastIndex.toString().padStart(4, '0')}.jpg`))}'\n`);
         
@@ -282,29 +328,18 @@ app.post('/api/render', authenticate, async (req, res) => {
                     '-r 30'
                 ]);
 
-            // Add Date Overlay if requested
-            if (settings.showDateOverlay) {
-                // Complex filter to add date text would go here. 
-                // For MVP server rendering stability, we skip dynamic text burning via ffmpeg 
-                // as it requires font config on the docker container.
-                // We rely on the client-side canvas render for previews, this server render is for raw quality.
-                // *Enhancement*: Could draw text using Sharp in the preprocessing step above.
-            }
-
             command
                 .save(outputPath)
                 .on('end', resolve)
                 .on('error', reject);
         });
 
-        // Cleanup Temp
+        // Cleanup
         fs.rmSync(tempDir, { recursive: true, force: true });
-
         res.json({ url: `/uploads/${outputFilename}` });
 
     } catch (e) {
         console.error("Render Error", e);
-        // Cleanup Temp
         if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
         res.status(500).json({ error: 'Rendering failed: ' + e.message });
     }

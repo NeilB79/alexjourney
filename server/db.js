@@ -21,16 +21,19 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
-  CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    name TEXT,
+  CREATE TABLE IF NOT EXISTS user_settings (
+    user_id TEXT PRIMARY KEY,
     start_date TEXT,
     end_date TEXT,
-    is_ongoing INTEGER,
-    settings_json TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_ongoing INTEGER DEFAULT 0,
+    theme_pref TEXT DEFAULT 'dark',
+    video_settings_json TEXT,
     FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT
   );
 
   CREATE TABLE IF NOT EXISTS photos (
@@ -41,10 +44,11 @@ db.exec(`
     original_name TEXT,
     mime_type TEXT,
     size INTEGER,
-    smart_crop_json TEXT, -- {x, y, width, height}
+    smart_crop_json TEXT, -- {x, y, width, height} stored from analysis
     added_by TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(added_by) REFERENCES users(id),
     UNIQUE(project_id, day_key)
   );
 `);
@@ -54,9 +58,22 @@ const seedAdmin = () => {
   const admin = db.prepare('SELECT * FROM users WHERE username = ?').get('neil');
   if (!admin) {
     const hash = bcrypt.hashSync('neil', 10);
-    const stmt = db.prepare('INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)');
-    stmt.run('u_admin', 'neil', hash, 'admin');
+    const id = 'u_admin';
+    db.prepare('INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)').run(id, 'neil', hash, 'admin');
+    
+    // Default Settings for Admin
+    db.prepare(`
+      INSERT OR IGNORE INTO user_settings (user_id, start_date, end_date, is_ongoing) 
+      VALUES (?, ?, ?, ?)
+    `).run(id, '2025-01-01', '2025-12-31', 0);
+    
     console.log('Admin user "neil" created.');
+  }
+
+  // Seed Default Project
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get('p_default');
+  if (!project) {
+    db.prepare('INSERT INTO projects (id, name) VALUES (?, ?)').run('p_default', 'Family Memories');
   }
 };
 
