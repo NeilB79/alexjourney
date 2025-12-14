@@ -24,7 +24,10 @@ export const DebugConsole: React.FC = () => {
         // Initial load
         update();
         
-        return logger.subscribe(update);
+        const unsubscribe = logger.subscribe(update);
+        return () => {
+            unsubscribe();
+        };
     }, [isOpen]);
 
     useEffect(() => {

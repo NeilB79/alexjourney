@@ -117,6 +117,19 @@ export const api = {
         return res.json();
     },
 
+    updateUser: async (id: string, username: string, password?: string) => {
+        if (isMock()) {
+            return { success: true };
+        }
+        const res = await fetch(`${API_BASE}/users/${id}`, {
+            method: 'PUT',
+            headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) throw new Error('Failed to update user');
+        return res.json();
+    },
+
     getProject: async () => {
         if (isMock()) return MOCK_PROJECT;
         

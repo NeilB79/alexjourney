@@ -1,9 +1,21 @@
 import { RenderSettings, UserProfile } from "./types";
 
-export const APP_VERSION = "v1.1.2";
+export const APP_VERSION = "v1.1.3";
 export const BUILD_DATE = new Date().toDateString();
 
 export const CHANGELOG = [
+  {
+    version: "v1.1.3",
+    date: "2025-01-27",
+    changes: [
+      "Added Docker and Nginx configuration files.",
+      "Added .nb backup files for infrastructure config.",
+      "Enabled Admin User Editing (Rename/Password Reset).",
+      "Integrated Google Photos Picker.",
+      "Fixed Header to lock to current session.",
+      "Improved Debug Console readability."
+    ]
+  },
   {
     version: "v1.1.2",
     date: "2025-01-27",

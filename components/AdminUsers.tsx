@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, User as UserIcon, Loader2 } from 'lucide-react';
+import { UserPlus, User as UserIcon, Loader2, Edit2, Check, X } from 'lucide-react';
 import { api } from '../services/api';
 import { UserProfile } from '../types';
 
@@ -8,6 +8,10 @@ export const AdminUsers: React.FC = () => {
     const [newUser, setNewUser] = useState({ username: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    
+    // Edit State
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState({ username: '', password: '' });
 
     useEffect(() => {
         loadUsers();
@@ -33,6 +37,32 @@ export const AdminUsers: React.FC = () => {
         }
     };
 
+    const startEditing = (u: UserProfile) => {
+        setEditingId(u.id);
+        setEditForm({ username: u.name, password: '' });
+        setError('');
+    };
+
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditForm({ username: '', password: '' });
+    };
+
+    const saveUser = async () => {
+        if (!editForm.username) return;
+        setLoading(true);
+        try {
+            // If password is empty string, backend should ignore it
+            await api.updateUser(editingId!, editForm.username, editForm.password || undefined);
+            setEditingId(null);
+            loadUsers();
+        } catch (e) {
+            setError('Update failed.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-sm">
             <h3 className="font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
@@ -40,15 +70,56 @@ export const AdminUsers: React.FC = () => {
             </h3>
 
             <div className="space-y-2 mb-6">
-                {users.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${u.color === 'blue' ? 'bg-blue-500' : 'bg-pink-500'}`}>
-                            {u.avatar}
+                {users.map(u => {
+                    const isEditing = editingId === u.id;
+                    return (
+                        <div key={u.id} className="flex flex-col gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg transition-all">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${u.color === 'blue' ? 'bg-blue-500' : 'bg-pink-500'}`}>
+                                    {u.avatar}
+                                </div>
+                                
+                                {isEditing ? (
+                                    <input 
+                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm flex-1 min-w-0"
+                                        value={editForm.username}
+                                        onChange={e => setEditForm({...editForm, username: e.target.value})}
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1 truncate cursor-pointer hover:text-blue-500" onClick={() => startEditing(u)}>
+                                        {u.name}
+                                    </span>
+                                )}
+
+                                <span className="text-xs text-slate-400 shrink-0 capitalize w-12 text-right">{u.role || 'user'}</span>
+                                
+                                {isEditing ? (
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={saveUser} disabled={loading} className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600"><Check size={14}/></button>
+                                        <button onClick={cancelEditing} className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><X size={14}/></button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => startEditing(u)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors">
+                                        <Edit2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {isEditing && (
+                                <div className="pl-11 pr-14 pb-1 animate-in slide-in-from-top-1">
+                                    <input 
+                                        type="password"
+                                        placeholder="New Password (optional)"
+                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-sm"
+                                        value={editForm.password}
+                                        onChange={e => setEditForm({...editForm, password: e.target.value})}
+                                    />
+                                </div>
+                            )}
                         </div>
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{u.name}</span>
-                        <span className="text-xs text-slate-400 ml-auto capitalize">{u.role || 'user'}</span>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             <form onSubmit={handleAddUser} className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">

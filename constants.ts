@@ -1,9 +1,27 @@
 import { RenderSettings, UserProfile } from "./types";
 
-export const APP_VERSION = "v1.1.2";
+export const APP_VERSION = "v1.1.4";
 export const BUILD_DATE = new Date().toDateString();
 
 export const CHANGELOG = [
+  {
+    version: "v1.1.4",
+    date: "2025-01-27",
+    changes: [
+      "Fixed version synchronization issue.",
+      "Applied Admin User Editing and Google Photos features to main build.",
+      "Added Docker and Nginx configurations."
+    ]
+  },
+  {
+    version: "v1.1.3",
+    date: "2025-01-27",
+    changes: [
+      "Enabled Admin User Editing (Rename/Password Reset).",
+      "Integrated Google Photos Picker.",
+      "Fixed Header to lock to current session."
+    ]
+  },
   {
     version: "v1.1.2",
     date: "2025-01-27",

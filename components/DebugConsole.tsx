@@ -24,7 +24,10 @@ export const DebugConsole: React.FC = () => {
         // Initial load
         update();
         
-        return logger.subscribe(update);
+        const unsubscribe = logger.subscribe(update);
+        return () => {
+            unsubscribe();
+        };
     }, [isOpen]);
 
     useEffect(() => {
@@ -63,9 +66,10 @@ export const DebugConsole: React.FC = () => {
             {/* Console Window */}
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center pointer-events-none">
-                    <div className="absolute inset-0 bg-black/20 backdrop-blur-sm pointer-events-auto" onClick={() => setIsOpen(false)} />
+                    {/* Dark background without blur for better text visibility */}
+                    <div className="absolute inset-0 bg-black/90 pointer-events-auto" onClick={() => setIsOpen(false)} />
                     
-                    <div className="bg-slate-900 w-full sm:w-[800px] h-[70vh] sm:rounded-xl shadow-2xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-10 border border-slate-700">
+                    <div className="bg-slate-900 w-full sm:w-[800px] h-[70vh] sm:rounded-xl shadow-2xl flex flex-col pointer-events-auto animate-in slide-in-from-bottom-10 border border-slate-700 relative z-10">
                         {/* Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-950 sm:rounded-t-xl">
                             <div className="flex items-center gap-2">
